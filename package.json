@@ -1,0 +1,28 @@
+{
+  "name": "distributed-hash-table",
+  "private": true,
+  "description": "An experimental Distributed Hash Table (DHT) network implemented in Node.js",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tanndev/node-dht.git"
+  },
+  "keywords": [
+    "DHT",
+    "Distributed",
+    "Hash",
+    "Table",
+    "Chord",
+    "Pastry",
+    "Tor"
+  ],
+  "author": "James Tanner <james.tanner@tanndev.com>",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/tanndev/node-dht/issues"
+  },
+  "homepage": "https://github.com/tanndev/node-dht#readme"
+}
