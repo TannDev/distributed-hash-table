@@ -10,5 +10,5 @@ An experimental Distributed Hash Table (DHT) network implemented in Node.js
 - Recover from a node unexpectedly terminating
 
 ## Reference Materials:
-- [Tor: The Second-Generation Onion Router](docs/tor-design.pdf) - a paper about how the Tor protocol should work.
-- [https://www.freepastry.org/](FreePastry.org) - A description about the Pastry DHT schema.
+- [A paper about Tor](docs/tor-design.pdf) for ideas on improving security.
+- [The original Pastry design](docs/pastry.pdf) for ideas on the protocol.
