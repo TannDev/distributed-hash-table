@@ -1,1 +1,6 @@
+# IDEs
 /.idea/
+
+# Builds and Dependencies
+/dist
+node_modules
