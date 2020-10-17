@@ -1,14 +1,11 @@
 import crypto = require('crypto');
-import SocketIO = require('socket.io');
 import net = require('net');
-import http = require('http');
 
 import NetworkConfig from './NetworkConfig';
 import {NetworkConfigDocument} from './NetworkConfig';
 
 export default class Node {
-    readonly #server: http.Server;
-    readonly #socket: SocketIO.Server;
+    readonly #server: net.Server;
     readonly #routes: Route[][];
     readonly nodeId: string;
     readonly networkConfig: NetworkConfig;
@@ -24,7 +21,7 @@ export default class Node {
 
         // Create an initial node id.
         // TODO Externalize this properly.
-        const nodeId = crypto.randomBytes(hashLength / 8).toString('hex')
+        const nodeId = crypto.randomBytes(hashLength / 8).toString('hex');
 
         // Create the node.
         const node = new Node(nodeId, networkConfig);
@@ -37,15 +34,36 @@ export default class Node {
         return node;
     }
 
-    static async joinNetwork(bootstrapperUrl: string): Promise<Node> {
+    static async joinNetwork(host: string, port: number): Promise<Node> {
         // Initialize a socket client.
-        const IO = require('socket.io-client');
-        const socket = IO(bootstrapperUrl);
+        const socket = new net.Socket();
 
         // Promisify the connection process.
         return new Promise((resolve) => {
             // Try to connect to the bootstrapper.
-            // TODO De-socket this. Sockets are a horrible way to do this.
+            console.log("Starting to join a new network node...")
+            socket.connect(port, host, () => {
+                console.log('Connected to bootstrapper node. Asking to join...')
+                // TODO Define a request language. Ideally not using JSON.
+                const request = {instruction: 'JOIN'}
+                socket.write(JSON.stringify(request));
+
+                socket.on('data', (data) => {
+                    console.log('Received an answer from bootstrapper node.');
+                    console.log('It said:', data.toString());
+                    // TODO Handle the response.
+
+                    const {nodeId, networkConfig} = JSON.parse(data.toString());
+                    if (!nodeId) throw new Error("Bootstrapper rejected the join request.");
+
+                    const node = new Node(nodeId, networkConfig);
+                    resolve(node);
+                })
+
+                socket.on('close', () => {
+                    console.log('Hung up with the bootstrapper node.')
+                })
+            })
             socket.once('connect', () => {
                 console.log("Trying to join new node...")
 
@@ -72,11 +90,6 @@ export default class Node {
     }
 
     protected constructor(nodeId: string, config: NetworkConfigDocument, port?: number) {
-        // Start a new socket server.
-        // TODO Don't use Socket.io.
-        this.#server = http.createServer();
-        this.#socket = new SocketIO(this.#server);
-
         this.nodeId = nodeId;
         this.networkConfig = new NetworkConfig(config);
 
@@ -86,40 +99,50 @@ export default class Node {
             .fill(null)
             .map(() => new Array(base).fill(null));
 
-        // Mount handlers for the socket.
-        this.#socket.on('connection', client => {
-            client.on('join', (data, callback) => {
-                this.log(`RECV from ${client.id}:`, data);
-                callback({
-                    nodeId: crypto.randomBytes(hashLength / 8).toString('hex'),
-                    networkConfig: this.networkConfig.serialize()
-                    // TODO Add routes.
-                });
+        // Start a new TCP server;
+        this.#server = net.createServer();
+
+        this.#server.on('connection', (socket) => {
+            this.log(`CONNECTED from ${socket.remoteAddress}:${socket.remotePort}`);
+
+            socket.on('data', (data) => {
+                this.log(`DATA from ${socket.remoteAddress}:${socket.remotePort}`, data.toString());
+                // TODO Capture data longer than one burst.
+                const request = JSON.parse(data.toString());
+
+                // Handle JOIN events.
+                if (request?.instruction === 'JOIN') {
+                    const response = {
+                        nodeId: crypto.randomBytes(hashLength / 8).toString('hex'),
+                        networkConfig: this.networkConfig.serialize()
+                    }
+                    socket.write(JSON.stringify(response));
+
+                    // TODO _Actually_ handle JOIN events.
+                }
+
+                // TODO Handle all the other events.
+            })
+
+            socket.on('close', (data) => {
+                this.log(`CLOSED from ${socket.remoteAddress}:${socket.remotePort}`);
+                // TODO Something with the close.
             })
         })
 
-        // Prepare a promise for connections.
+        // Listen on the server and create a promise for it.
         this.ready = new Promise((resolve, reject) => {
-            this.#server.on('listening', () => {
+            this.#server.listen(port, () => {
                 const port = (this.#server.address() as net.AddressInfo).port
                 this.log(`Listening on ${port}`);
                 resolve(port);
             })
             this.#server.on('error', error => reject(error));
         })
-
-        // Start listening for connections.
-        this.#server.listen(port);
-
-        // TODO Initialize the node.
     }
 
     log(message: string, ...params: any) {
         console.log(`Node ${this.nodeId}: ${message}`, ...params);
-    }
-
-    async find(key: string) {
-        // TODO Route to the intended node.
     }
 
     // TODO Add event handlers for delivered and forwarded values.
