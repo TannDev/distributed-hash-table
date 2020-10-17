@@ -1,13 +1,14 @@
 /**
  * Serialized settings for {@link NetworkConfig}.
  */
-interface NetworkConfigDocument {
+export interface NetworkConfigDocument {
     b?: number;
     leafRange?: number;
+    replications?: number;
 }
 
 
-export default class NetworkConfig {
+export default class NetworkConfig implements NetworkConfigDocument {
     /**
      * A general configuration parameter used to calculate other settings.
      * For example, the numeric base used to split nodeIds and keys will always be exactly 2^b.
@@ -19,6 +20,13 @@ export default class NetworkConfig {
     readonly b: number;
 
     /**
+     * The hash length used for nodeIds and keys.
+     *
+     * Typical value: 128
+     */
+    readonly hashLength: number = 128;
+
+    /**
      * The number of nodes, in each direction, that a node should consider to be in its leaf set.
      * This also represents the minimum number of adjacent nodes that must fail before data or route integrity is lost.
      *
@@ -27,6 +35,13 @@ export default class NetworkConfig {
      * Typical values: 8 or 16
      */
     readonly leafRange: number;
+
+    /**
+     * The number of nodes which will store any given key=value pair.
+     *
+     * This is usually the same as {@link NetworkConfig.leafRange}, but can be smaller.
+     */
+    readonly replications: number;
 
     // TODO Add neighborhood size ('M').
 
@@ -37,10 +52,11 @@ export default class NetworkConfig {
      * @param [config.b] Sets the base configuration value {@link NetworkConfig.b}. Default: 4.
      * @param [config.leafRange] Sets {@link NetworkConfig.leafRange}. Default: 2^(b-1).
      */
-    constructor({b, leafRange}: NetworkConfigDocument = {}) {
+    constructor({b, leafRange, replications}: NetworkConfigDocument = {}) {
         // Initialize settings as provided, or to their defaults.
         this.b = b ?? 4;
         this.leafRange = leafRange ?? 2 ** (this.b - 1);
+        this.replications = replications ?? this.leafRange;
 
         // Make sure the values are valid.
         this.validate()
@@ -51,7 +67,7 @@ export default class NetworkConfig {
     }
 
     validate(): void {
-        const {b, leafRange} = this;
+        const {b, leafRange, replications} = this;
 
         // Validate the settings.
         if (!Number.isInteger(b) || b < 1 || b > 6)
@@ -59,6 +75,9 @@ export default class NetworkConfig {
 
         if (!Number.isInteger(leafRange) || leafRange < 1)
             throw new Error('<NetworkConfig>.range must be an integer >= 1')
+
+        if (!Number.isInteger(replications) || replications < 1 || replications > leafRange)
+            throw new Error('<NetworkConfig>.replications must be an integer >= 1 and no larger than the leaf range.')
     }
 
     serialize(): NetworkConfigDocument {

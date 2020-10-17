@@ -1,19 +1,18 @@
 import NetworkConfig from './classes/NetworkConfig';
+import Node from "./classes/Node";
 
-import Express = require('express');
-
-const app = Express();
-
+console.log('Starting new network...')
 const networkConfig = new NetworkConfig();
+Node.startNetwork(networkConfig)
+    .then(async bootstrapNode => {
+        console.log('Boostrapper launched. Replicating nodes...')
+        const boostrapperUrl = `http://localhost:${await bootstrapNode.ready}`;
 
-console.log(networkConfig.toString());
-console.log(networkConfig.serialize());
-console.log(networkConfig);
+        // Launch another node.)
+        const node2 = await Node.joinNetwork(boostrapperUrl);
 
-app.get('/', (req, res) => {
-    res.json(networkConfig.serialize());
-})
-
-app.listen(8080, () => {
-    console.log(`Listening on http://localhost:8080`);
-})
+    })
+    .catch(error => {
+        console.error(error);
+        process.exit(1);
+    })
