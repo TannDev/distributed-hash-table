@@ -1,8 +1,7 @@
 import crypto = require('crypto');
 import net = require('net');
-
-import NetworkConfig from './NetworkConfig';
-import {NetworkConfigDocument} from './NetworkConfig';
+import NetworkConfig, {NetworkConfigDocument} from './NetworkConfig';
+import {Message, MessageType} from "./Message";
 
 export default class Node {
     readonly #server: net.Server;
@@ -44,18 +43,23 @@ export default class Node {
             console.log("Starting to join a new network node...")
             socket.connect(port, host, () => {
                 console.log('Connected to bootstrapper node. Asking to join...')
-                // TODO Define a request language. Ideally not using JSON.
-                const request = {instruction: 'JOIN'}
-                socket.write(JSON.stringify(request));
+                const request = new Message(MessageType.JOIN);
+                socket.write(request.serialize());
 
                 socket.on('data', (data) => {
                     console.log('Received an answer from bootstrapper node.');
-                    console.log('It said:', data.toString());
-                    // TODO Handle the response.
+                    const response = Message.deserialize(data);
 
-                    const {nodeId, networkConfig} = JSON.parse(data.toString());
-                    if (!nodeId) throw new Error("Bootstrapper rejected the join request.");
+                    // TODO Remove this.
+                    console.log('It said:', response);
 
+                    // Check the response.
+                    if (response.type !== MessageType.ACCEPT) throw new Error("Bootstrapper rejected the join request.");
+                    if (!response.data?.nodeId) throw new Error("Bootstrapper didn't provide a node id.");
+                    if (!response.data?.networkConfig) throw new Error("Bootstrapper didn't provide a network config.");
+
+                    // Create the new node.
+                    const {nodeId, networkConfig} = response.data;
                     const node = new Node(nodeId, networkConfig);
                     resolve(node);
                 })
@@ -108,20 +112,8 @@ export default class Node {
             socket.on('data', (data) => {
                 this.log(`DATA from ${socket.remoteAddress}:${socket.remotePort}`, data.toString());
                 // TODO Capture data longer than one burst.
-                const request = JSON.parse(data.toString());
-
-                // Handle JOIN events.
-                if (request?.instruction === 'JOIN') {
-                    const response = {
-                        nodeId: crypto.randomBytes(hashLength / 8).toString('hex'),
-                        networkConfig: this.networkConfig.serialize()
-                    }
-                    socket.write(JSON.stringify(response));
-
-                    // TODO _Actually_ handle JOIN events.
-                }
-
-                // TODO Handle all the other events.
+                const message = Message.deserialize(data);
+                this.handleMessage(message, socket);
             })
 
             socket.on('close', (data) => {
@@ -139,6 +131,24 @@ export default class Node {
             })
             this.#server.on('error', error => reject(error));
         })
+    }
+
+    private handleMessage(message: Message, socket: net.Socket) {
+        this.log(`MESSAGE from ${socket.remoteAddress}:${socket.remotePort}`, message);
+        // Handle JOIN events.
+        switch (message?.type) {
+            case MessageType.JOIN:
+                const response = new Message(MessageType.ACCEPT, {
+                    nodeId: crypto.randomBytes(this.networkConfig.hashLength / 8).toString('hex'),
+                    networkConfig: this.networkConfig.serialize()
+                })
+                socket.write(response.serialize());
+
+                // TODO _Actually_ handle JOIN events.
+                return;
+            default:
+                this.log("Got a message with an invalid type.");
+        }
     }
 
     log(message: string, ...params: any) {
