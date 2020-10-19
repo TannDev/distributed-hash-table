@@ -1,4 +1,4 @@
-# Distributed Hash Map
+# Distributed Hash Table
 An experimental Distributed Hash Table (DHT) network implemented in Node.js
 
 ## Intended Features
